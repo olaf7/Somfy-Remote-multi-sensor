@@ -1,3 +1,8 @@
+#include <RemoteDebugWS.h>
+#include <RemoteDebug.h>
+#include <RemoteDebugCfg.h>
+#include <telnet.h>
+
 #include <Arduino.h>
 #include <vector>
 
@@ -6,6 +11,8 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
+
+// #define DEBUG_DISABLED true
 
 /* 
  *  Code taken from:
@@ -114,9 +121,97 @@ void SendCommand(byte *frame, byte sync);
 void receivedCallback(char* topic, byte* payload, unsigned int length);
 void mqttconnect();
 
+// Remote debugging setup \\
+
+#ifndef DEBUG_DISABLED
+
+  #define HOST_NAME "somfycube"
+  #define WEB_SERVER_ENABLED true
+  #define USE_MDNS true
+  
+  #if defined ESP8266
+    #include <ESP8266WiFi.h>
+  
+    #ifdef USE_MDNS
+      #include <DNSServer.h>
+      #include <ESP8266mDNS.h>
+    #endif // use mDNS
+  
+    #ifdef WEB_SERVER_ENABLED
+      #include <ESP8266WebServer.h>
+    #endif // web server
+  
+  #elif defined ESP32
+    #include <WiFi.h>
+  
+    #ifdef USE_MDNS
+      #include <DNSServer.h>
+      #include "ESPmDNS.h"
+    #endif // use mDNS
+    
+    #ifdef WEB_SERVER_ENABLED
+      #include <WebServer.h>
+    #endif // webserver
+
+  #endif
+  
+#else
+
+  #error "For now, RemoteDebug has sever limitation in our situation"
+
+#endif // debug disabled
+
+#ifdef WEB_SERVER_ENABLED
+  #if defined ESP8266
+    ESP8266WebServer HTTPServer(80);
+  #elif defined ESP32
+    WebServer HTTPServer(80);
+  #endif // esp8266 / esp32
+#endif // web server
+
+#ifndef DEBUG_DISABLED
+  RemoteDebug Debug;
+#endif
+
 void setup() {
     // USB serial port
     Serial.begin(115200);
+
+    //connectWiFi();
+    #ifdef ESP8266
+    WiFi.hostname(HOST_NAME);
+    #endif
+    #if defined USE_MDNS && defined HOST_NAME
+    if (MDNS.begin(HOST_NAME)) {
+      Serial.print("* MDNS responder started. Hostname -> ");
+      Serial.println(HOST_NAME);
+    }
+    #ifdef WEB_SERVER_ENABLED
+      MDNS.addService("http", "tcp", 80);   // Web Server
+    #endif
+
+    #ifndef DEBUG_DISABLED
+    //RemoteDebug Debug;
+    // Initialise the server (telnet or web socket) of RemoteDebug
+    Debug.begin(HOST_NAME);
+    // Options
+    Debug.setResetCmdEnabled(true); // Enable the reset command
+    Debug.showProfiler(true); // To show profiler - time between messages of Debug
+    Debug.showColors(true);
+    Debug.setSerialEnabled(true); // If you want serial echo - Only recommanded if ESP is pluged into USB
+    #endif
+    
+    #ifndef DEBUG_DISABLED
+      MDNS.addService("telnet", "tcp", 23); // Telnet setrver of RemoteDebug, register as telnet
+      // telnet is evil...
+    #endif
+    #endif  // MDNS
+    #ifdef WEB_SERVER_ENABLED
+    HTTPServer.on("/", handleRoot);
+    HTTPServer.onNotFound(handleNotFound);
+    HTTPServer.begin();
+    Serial.println("* HTTP server started");
+    #endif
 
     pinMode(PIRPIN, INPUT);
     pinMode(DHTPIN, INPUT);
@@ -127,6 +222,12 @@ void setup() {
     ArduinoOTA.setPassword((const char *)OTApassword);
 
     Serial.print("calibrating sensor ");
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.INFO)) {
+      Debug.println("calibrating sensor ");
+    }
+    #endif
+    
     for (int i = 0; i < calibrationTime; i++) {
       Serial.print(".");
       delay(1000);
@@ -134,20 +235,70 @@ void setup() {
 
     ArduinoOTA.onStart([]() {
       Serial.println("Starting");
+      #ifndef DEBUG_DISABLED
+      if (Debug.isActive(Debug.INFO)) {
+        Debug.println("Starting");
+      }
+      #endif
     });
     ArduinoOTA.onEnd([]() {
       Serial.println("\nEnd");
+      #ifndef DEBUG_DISABLED
+      if (Debug.isActive(Debug.DEBUG)) {
+        Debug.println("\nEnd");
+      }
+      #endif
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
       Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      #ifndef DEBUG_DISABLED
+      if (Debug.isActive(Debug.DEBUG)) {
+        Debug.printf("Progress: %u%%\r", (progress / (total / 100)));
+      }
+      #endif
     });
     ArduinoOTA.onError([](ota_error_t error) {
       Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      if (error == OTA_AUTH_ERROR) {
+        Serial.println("Auth Failed");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("Auth Failed");
+        }
+        #endif
+      }
+      else if (error == OTA_BEGIN_ERROR) {
+        Serial.println("Begin Failed");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("Begin Failed");
+        }
+        #endif
+      }
+      else if (error == OTA_CONNECT_ERROR) {
+        Serial.println("Connect Failed");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("Connect Failed");
+        }
+        #endif
+      }
+      else if (error == OTA_RECEIVE_ERROR) {
+        Serial.println("Receive Failed");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("Receive Failed");
+        }
+        #endif
+      }
+      else if (error == OTA_END_ERROR) {
+        Serial.println("End Failed");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("End Failed");
+        }
+        #endif
+      }
     });
     ArduinoOTA.begin();
     
@@ -158,18 +309,38 @@ void setup() {
     // Connect to WiFi
     Serial.print("Connecting to ");
     Serial.println(wifi_ssid);
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.INFO)) {
+      Debug.print("Connecting to ");
+      Debug.println(wifi_ssid);
+    }
+    #endif
 
     WiFi.begin(wifi_ssid, wifi_password);
 
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.INFO)) {
+          Debug.print(".");
+        }
+        #endif
     }
 
     Serial.println("");
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.INFO)) {
+      Debug.println("");
+      Debug.println("WiFi connected");
+      Debug.println("IP address: ");
+      Debug.println(WiFi.localIP());
+    }
+    #endif
 
     // Configure MQTT
     mqtt.setServer(mqtt_server, mqtt_port);
@@ -192,9 +363,19 @@ void setup() {
     // Print out all the configured remotes.
     // Also reset the rolling codes for ESP8266 if needed.
     for ( REMOTE remote : remotes ) {
+      
         Serial.print("Simulated remote number : ");
         Serial.println(remote.id, HEX);
         Serial.print("Current rolling code    : ");
+        
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.print("Simulated remote number : ");
+          Debug.println(remote.id, HEX);
+          Debug.print("Current rolling code    : ");
+        }
+        #endif
+        
         unsigned int current_code;
 
         #ifdef ESP32
@@ -208,8 +389,18 @@ void setup() {
         #endif
 
         Serial.println( current_code );
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println( current_code );
+        }
+        #endif
     }
     Serial.println();
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.println();
+    }
+    #endif
 }
 
 /********************************** START SEND STATE*****************************************/
@@ -229,6 +420,12 @@ void sendState() {
   root.printTo(buffer, sizeof(buffer));
 
   Serial.println(buffer);
+  #ifndef DEBUG_DISABLED
+  if (Debug.isActive(Debug.DEBUG)) {
+    Debug.println(buffer);
+  }
+  #endif
+  
   mqtt.publish(state_topic, buffer, true);
 }
 
@@ -278,6 +475,10 @@ void loop() {
       LDR = newLDR;
       sendState();
     }
+
+    Debug.handle(); // Remote debug over WiFi
+    // debughandle(); // Equal to SerialDebug
+    
     delay(100);
 }
 
@@ -285,16 +486,32 @@ void mqttconnect() {
     // Loop until reconnected
     while ( !mqtt.connected() ) {
         Serial.print("MQTT connecting ...");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.INFO)) {
+          Debug.print("MQTT connecting ...");
+        }
+        #endif
 
         // Connect to MQTT, with retained last will message "offline"
         if (mqtt.connect(mqtt_id, mqtt_user, mqtt_password, status_topic, 1, 1, "offline")) {
             Serial.println("connected");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.INFO)) {
+              Debug.println("connected");
+            }
+            #endif
 
             // Subscribe to the topic of each remote with QoS 1
             for ( REMOTE remote : remotes ) {
                 mqtt.subscribe(remote.mqtt_topic, 1);
                 Serial.print("Subscribed to topic: ");
                 Serial.println(remote.mqtt_topic);
+                #ifndef DEBUG_DISABLED
+                if (Debug.isActive(Debug.DEBUG)) {
+                  Debug.print("Subscribed to topic : ");
+                  Debug.println(remote.mqtt_topic);
+                }
+                #endif
             }
 
             // Update status, message is retained
@@ -304,6 +521,14 @@ void mqttconnect() {
             Serial.print("failed, status code =");
             Serial.print(mqtt.state());
             Serial.println("try again in 5 seconds");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.print("failed, status code = ");
+              Debug.print(mqtt.state());
+              Debug.println("try again in 5 seconds");
+            }
+            #endif
+            
             // Wait 5 seconds before retrying
             delay(5000);
         }
@@ -317,12 +542,33 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
 
     Serial.print("MQTT message received: ");
     Serial.println(topic);
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.print("MQTT message received : ");
+      Debug.println(topic);
+    }
+    #endif
 
     Serial.print("Payload: ");
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.print("Payload : ");
+    }
+    #endif
     for (int i = 0; i < length; i++) {
         Serial.print((char)payload[i]);
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.print((char)payload[i]);
+        }
+        #endif
     }
     Serial.println();
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.println();
+    }
+    #endif
 
     // Command is valid if the payload contains one of the chars below AND the topic corresponds to one of the remotes
     if ( length == 1 && ( command == 'u' || command == 's' || command == 'd' || command == 'p' ) ) {
@@ -405,11 +651,26 @@ void BuildFrame(byte *frame, byte button, REMOTE remote) {
     frame[1] |= checksum; //  If a XOR of all the nibbles is equal to 0, the blinds will consider the checksum ok.
 
     Serial.println(""); Serial.print("With checksum : ");
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.print("With checksum : ");
+    }
+    #endif
     for(byte i = 0; i < 7; i++) {
         if(frame[i] >> 4 == 0) {
             Serial.print("0");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.print("0");
+            }
+            #endif
         }
         Serial.print(frame[i],HEX); Serial.print(" ");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.print(frame[i],HEX); Serial.print(" ");
+        }
+        #endif
     }
 
 
@@ -419,15 +680,39 @@ void BuildFrame(byte *frame, byte button, REMOTE remote) {
     }
 
     Serial.println(""); Serial.print("Obfuscated    : ");
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.INFO)) {
+      Debug.println();
+      Debug.print("Obfuscated    : ");
+    }
+    #endif
     for(byte i = 0; i < 7; i++) {
         if(frame[i] >> 4 == 0) {
             Serial.print("0");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.print("0");
+            }
+            #endif
         }
         Serial.print(frame[i],HEX); Serial.print(" ");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.print(frame[i], HEX);
+          Debug.print(" ");
+        }
+        #endif
     }
     Serial.println("");
     Serial.print("Rolling Code  : ");
     Serial.println(code);
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.println("");
+      Debug.print("Rolling Code  : ");
+      Debug.println(code);
+    }
+    #endif
 
     #ifdef ESP32
         preferences.putUInt( (String(remote.id) + "rolling").c_str(), code + 1); // Increment and store the rolling code
@@ -484,3 +769,32 @@ void SendCommand(byte *frame, byte sync) {
 bool checkBoundSensor(float newValue, float prevValue, float maxDiff) {
   return newValue < prevValue - maxDiff || newValue > prevValue + maxDiff;
 }
+
+#ifdef WEB_SERVER_ENABLED
+/////////// Handles
+
+void handleRoot() {
+  // Root webpage
+  String message = "Welcome to ESP";
+  message.concat(HOST_NAME);
+  message.concat(" remote debugging");
+  HTTPServer.send(200, "text/plain", message);
+}
+
+void handleNotFound() {
+  // Page not found (404)
+  String message = "File Not Found\n\n";
+  message.concat("URI: ");
+  message.concat(HTTPServer.uri());
+  message.concat("\nMethod: ");
+  message.concat((HTTPServer.method() == HTTP_GET)?"GET":"POST");
+  message.concat("\nArguments: ");
+  message.concat(HTTPServer.args());
+  message.concat("\n");
+  for (uint8_t i=0; i<HTTPServer.args(); i++){
+    message.concat(" " + HTTPServer.argName(i) + ": " + HTTPServer.arg(i) + "\n");
+  }
+  HTTPServer.send(404, "text/plain", message);
+}
+
+#endif
