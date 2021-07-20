@@ -18,10 +18,14 @@ So alternatively I decided to add debugging code and implement: [Arduino RemoteD
 * Adafruit Unified Sensor by Adafruit, version 1.1.4
 * PubSubClient by Nick O'Leary, version 2.8.0
 * RemoteDebug by Joao Lopes, version 3.0.5
-* Telnet?
-* mDNS?
-* ArduinoOTA?
-* Webserver?
+* ? ESP Telnet by Lennart Hennings, version 1.1.1
+* ? EthernetWebServer by Khoi Hoand, version 1.5.0
+* ? Functional-Vlpp by Khoi Hoang, version 1.0.2
+* ? RichHTTPServer by Chris Mullins, version 2.0.3
+* ? WebSerial by Ayush Sharma, version 1.1.0
+* ? WebSocket2 Generic by Khoi Hoang, version 1.5.0
+
+Libraries marked '__?__' are installed on my system. Not sure which one(s) are used.
 
 ## Used board
 esp8266 by ESP8266 Community version 2.7.4 (3.x did not work for me, with the Amica NodeMCU I am using)
