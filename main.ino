@@ -179,38 +179,72 @@ void setup() {
 
     //connectWiFi();
     #ifdef ESP8266
-    WiFi.hostname(HOST_NAME);
-    #endif
-    #if defined USE_MDNS && defined HOST_NAME
-    if (MDNS.begin(HOST_NAME)) {
-      Serial.print("* MDNS responder started. Hostname -> ");
-      Serial.println(HOST_NAME);
-    }
-    #ifdef WEB_SERVER_ENABLED
-      MDNS.addService("http", "tcp", 80);   // Web Server
+      WiFi.hostname(HOST_NAME);
     #endif
 
     #ifndef DEBUG_DISABLED
-    //RemoteDebug Debug;
-    // Initialise the server (telnet or web socket) of RemoteDebug
-    Debug.begin(HOST_NAME);
-    // Options
-    Debug.setResetCmdEnabled(true); // Enable the reset command
-    Debug.showProfiler(true); // To show profiler - time between messages of Debug
-    Debug.showColors(true);
-    Debug.setSerialEnabled(true); // If you want serial echo - Only recommanded if ESP is pluged into USB
+      //RemoteDebug Debug;
+      // Initialise the server (telnet or web socket) of RemoteDebug
+      Debug.begin(HOST_NAME);
+      // Options
+      Debug.setResetCmdEnabled(true); // Enable the reset command
+      Debug.showProfiler(true); // To show profiler - time between messages of Debug
+      Debug.showColors(true);
+      Debug.setSerialEnabled(true); // If you want serial echo - Only recommanded if ESP is pluged into USB
+
+      Debug.println("RemoteDebug initialised");
+      Serial.println("RemoteDebug initialised");
+      #if defined USE_MDNS
+        Debug.println("mDNS supported");
+        Serial.println("mDNS supported");
+      #else
+        Debug.println("mDNS NOT supported");
+        Serial.println("mDNS NOT supported");
+      #endif
+      #if defined USE_WEB_SERVER
+        Debug.println("Webserver will be available");
+        Serial.println("Webserver will be available");
+      #else
+        Debug.println("Webserver will NOT be available");
+        Serial.println("Webserver will NOT be available");
+      #endif
     #endif
-    
-    #ifndef DEBUG_DISABLED
-      MDNS.addService("telnet", "tcp", 23); // Telnet setrver of RemoteDebug, register as telnet
-      // telnet is evil...
-    #endif
-    #endif  // MDNS
+
+    #if defined USE_MDNS && defined HOST_NAME
+      if (MDNS.begin(HOST_NAME)) {
+        Serial.print("* MDNS responder started. Hostname -> ");
+        Serial.println(HOST_NAME);
+        #ifndef DEBUG_DISABLED
+          if (Debug.isActive(Debug.INFO)) {
+            Debug.print("* MDNS responder started. Hostname -> ");
+            Debug.println(HOST_NAME);
+          }
+        #endif
+      }
+      
+      #ifdef WEB_SERVER_ENABLED
+        MDNS.addService("http", "tcp", 80);   // Web Server
+      #endif
+      
+      #ifndef DEBUG_DISABLED
+        MDNS.addService("telnet", "tcp", 23); // Telnet setrver of RemoteDebug, register as telnet
+        // telnet is evil...
+      #endif
+      
+    #endif  // MDNS / hostname
+
     #ifdef WEB_SERVER_ENABLED
-    HTTPServer.on("/", handleRoot);
-    HTTPServer.onNotFound(handleNotFound);
-    HTTPServer.begin();
-    Serial.println("* HTTP server started");
+      HTTPServer.on("/", handleRoot);
+      HTTPServer.onNotFound(handleNotFound);
+      HTTPServer.begin();
+      Serial.println("* HTTP server started");
+      #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.INFO)) {
+          Debug.print("* HTTP server started. Hostname -> ");
+          Debug.println(HOST_NAME);
+          // also report the IP addresses (ipv4/ipv6) ? --> done elsewhere
+        }
+      #endif
     #endif
 
     pinMode(PIRPIN, INPUT);
@@ -224,12 +258,17 @@ void setup() {
     Serial.print("calibrating sensor ");
     #ifndef DEBUG_DISABLED
     if (Debug.isActive(Debug.INFO)) {
-      Debug.println("calibrating sensor ");
+      Debug.print("calibrating sensor ");
     }
     #endif
     
     for (int i = 0; i < calibrationTime; i++) {
       Serial.print(".");
+      #ifndef DEBUG_DISABLED
+      if (Debug.isActive(Debug.INFO)) {
+        Debug.print(".");
+      }
+      #endif
       delay(1000);
     }
 
@@ -259,6 +298,11 @@ void setup() {
     });
     ArduinoOTA.onError([](ota_error_t error) {
       Serial.printf("Error[%u]: ", error);
+      #ifndef DEBUG_DISABLED
+      if (Debug.isActive(Debug.DEBUG)) {
+        Debug.printf("Error[%u]: ", error);
+      }
+      #endif
       if (error == OTA_AUTH_ERROR) {
         Serial.println("Auth Failed");
         #ifndef DEBUG_DISABLED
@@ -583,22 +627,47 @@ void receivedCallback(char* topic, byte* payload, unsigned int length) {
     if ( commandIsValid ) {
         if ( command == 'u' ) {
             Serial.println("Monte"); // Somfy is a French company, after all.
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.println("Monte"); // Somfy is a French company, after all.
+            }
+    #endif
             BuildFrame(frame, HAUT, currentRemote);
         }
         else if ( command == 's' ) {
             Serial.println("Stop");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.println("Stop");
+            }
+            #endif
             BuildFrame(frame, STOP, currentRemote);
         }
         else if ( command == 'd' ) {
             Serial.println("Descend");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.println("Descend");
+            }
+            #endif
             BuildFrame(frame, BAS, currentRemote);
         }
         else if ( command == 'p' ) {
             Serial.println("Prog");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.println("Prog");
+            }
+            #endif
             BuildFrame(frame, PROG, currentRemote);
         }
 
         Serial.println("");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.println("");
+        }
+        #endif
 
         SendCommand(frame, 2);
         for ( int i = 0; i<2; i++ ) {
@@ -632,11 +701,27 @@ void BuildFrame(byte *frame, byte button, REMOTE remote) {
     frame[6] = remote.id;       // Remote address
 
     Serial.print("Frame         : ");
+    #ifndef DEBUG_DISABLED
+    if (Debug.isActive(Debug.DEBUG)) {
+      Debug.println("Frame          :");
+    }
+    #endif
     for(byte i = 0; i < 7; i++) {
         if(frame[i] >> 4 == 0) { //  Displays leading zero in case the most significant nibble is a 0.
             Serial.print("0");
+            #ifndef DEBUG_DISABLED
+            if (Debug.isActive(Debug.DEBUG)) {
+              Debug.print("0");
+            }
+            #endif
         }
         Serial.print(frame[i],HEX); Serial.print(" ");
+        #ifndef DEBUG_DISABLED
+        if (Debug.isActive(Debug.DEBUG)) {
+          Debug.print(frame[i],HEX);
+          Debug.print(" ");
+        }
+        #endif
     }
 
     // Checksum calculation: a XOR of all the nibbles
@@ -653,6 +738,7 @@ void BuildFrame(byte *frame, byte button, REMOTE remote) {
     Serial.println(""); Serial.print("With checksum : ");
     #ifndef DEBUG_DISABLED
     if (Debug.isActive(Debug.DEBUG)) {
+      Debug.println("");
       Debug.print("With checksum : ");
     }
     #endif
@@ -668,7 +754,8 @@ void BuildFrame(byte *frame, byte button, REMOTE remote) {
         Serial.print(frame[i],HEX); Serial.print(" ");
         #ifndef DEBUG_DISABLED
         if (Debug.isActive(Debug.DEBUG)) {
-          Debug.print(frame[i],HEX); Serial.print(" ");
+          Debug.print(frame[i],HEX);
+          Debug.print(" ");
         }
         #endif
     }
@@ -779,6 +866,12 @@ void handleRoot() {
   message.concat(HOST_NAME);
   message.concat(" remote debugging");
   HTTPServer.send(200, "text/plain", message);
+  #ifndef DEBUG_DISABLED
+  if (Debug.isActive(Debug.DEBUG)) {
+    Debug.print("Sending HTTP - 200 text/plain: ");
+    Debug.print(message);
+  }
+  #endif
 }
 
 void handleNotFound() {
@@ -795,6 +888,12 @@ void handleNotFound() {
     message.concat(" " + HTTPServer.argName(i) + ": " + HTTPServer.arg(i) + "\n");
   }
   HTTPServer.send(404, "text/plain", message);
+  #ifndef DEBUG_DISABLED
+  if (Debug.isActive(Debug.DEBUG)) {
+    Debug.print("Sending HTTP - 404 text/plain: ");
+    Debug.print(message);
+  }
+  #endif
 }
 
 #endif
