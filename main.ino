@@ -12,8 +12,6 @@
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 
-// #define DEBUG_DISABLED true
-
 /* 
  *  Code taken from:
  *  https://github.com/cbrherms/ESP-MQTT-JSON-Multisensor/blob/8c87c4a5ac824b71de16bef0f4620344e4516924/bruh_mqtt_multisensor_github/bruh_mqtt_multisensor_github.ino
@@ -122,7 +120,6 @@ void receivedCallback(char* topic, byte* payload, unsigned int length);
 void mqttconnect();
 
 // Remote debugging setup \\
-
 #ifndef DEBUG_DISABLED
 
   #define HOST_NAME "somfycube"
@@ -153,13 +150,17 @@ void mqttconnect();
       #include <WebServer.h>
     #endif // webserver
 
+  #else
+    #error "Unknown/unsupported board"
+
   #endif
   
-#else
+//#else
 
-  #error "For now, RemoteDebug has sever limitation in our situation"
+  //Serial.println("Cannot use RemoteDebug, limiting to Serial output");
+  //#error "Cannot use RemoteDebug"
 
-#endif // debug disabled
+//#endif // debug disabled
 
 #ifdef WEB_SERVER_ENABLED
   #if defined ESP8266
@@ -201,13 +202,18 @@ void setup() {
         Debug.println("mDNS NOT supported");
         Serial.println("mDNS NOT supported");
       #endif
-      #if defined USE_WEB_SERVER
+      
+      #if defined WEB_SERVER_ENABLED
         Debug.println("Webserver will be available");
         Serial.println("Webserver will be available");
       #else
         Debug.println("Webserver will NOT be available");
         Serial.println("Webserver will NOT be available");
       #endif
+    
+    #else
+      Serial.println("RemoteDebugging is disabled.");
+      Serial.println("Output is limited to Serial only.h");
     #endif
 
     #if defined USE_MDNS && defined HOST_NAME
@@ -227,7 +233,8 @@ void setup() {
       #endif
       
       #ifndef DEBUG_DISABLED
-        MDNS.addService("telnet", "tcp", 23); // Telnet setrver of RemoteDebug, register as telnet
+        MDNS.addService("telnet", "tcp", 23); // Telnet server of RemoteDebug, register as telnet
+        Serial.println("Adding Service Telnet");
         // telnet is evil...
       #endif
       
@@ -520,7 +527,9 @@ void loop() {
       sendState();
     }
 
-    Debug.handle(); // Remote debug over WiFi
+    #ifndef DEBUG_DISABLED
+      Debug.handle(); // Remote debug over WiFi
+    #endif
     // debughandle(); // Equal to SerialDebug
     
     delay(100);
