@@ -119,14 +119,14 @@ void SendCommand(byte *frame, byte sync);
 void receivedCallback(char* topic, byte* payload, unsigned int length);
 void mqttconnect();
 
-// Remote debugging setup \\
+// Remote debugging setup
 #ifndef DEBUG_DISABLED
 
   #define HOST_NAME "somfycube"
   #define WEB_SERVER_ENABLED true
   #define USE_MDNS true
   
-  #if defined ESP8266
+  #ifdef ESP8266
     #include <ESP8266WiFi.h>
   
     #ifdef USE_MDNS
@@ -155,12 +155,12 @@ void mqttconnect();
 
   #endif
   
-//#else
+#else
 
-  //Serial.println("Cannot use RemoteDebug, limiting to Serial output");
-  //#error "Cannot use RemoteDebug"
+  Serial.println("Cannot use RemoteDebug, limiting to Serial output");
+  #error "Cannot use RemoteDebug"
 
-//#endif // debug disabled
+#endif // debug disabled
 
 #ifdef WEB_SERVER_ENABLED
   #if defined ESP8266
@@ -178,9 +178,17 @@ void setup() {
     // USB serial port
     Serial.begin(115200);
 
+    while (!Serial) {
+      ; // wait for Serial to become available
+    }
+
+    Serial.print("Setting hostname if required ... ");
     //connectWiFi();
     #ifdef ESP8266
       WiFi.hostname(HOST_NAME);
+      Serial.println("Done.");
+    #else
+      Serial.println("No need.");
     #endif
 
     #ifndef DEBUG_DISABLED
@@ -191,11 +199,11 @@ void setup() {
       Debug.setResetCmdEnabled(true); // Enable the reset command
       Debug.showProfiler(true); // To show profiler - time between messages of Debug
       Debug.showColors(true);
-      Debug.setSerialEnabled(true); // If you want serial echo - Only recommanded if ESP is pluged into USB
+      Debug.setSerialEnabled(true); // If you want serial echo - Only recommended if ESP is plugged into USB
 
       Debug.println("RemoteDebug initialised");
       Serial.println("RemoteDebug initialised");
-      #if defined USE_MDNS
+      #ifdef USE_MDNS
         Debug.println("mDNS supported");
         Serial.println("mDNS supported");
       #else
@@ -203,7 +211,7 @@ void setup() {
         Serial.println("mDNS NOT supported");
       #endif
       
-      #if defined WEB_SERVER_ENABLED
+      #ifdef WEB_SERVER_ENABLED
         Debug.println("Webserver will be available");
         Serial.println("Webserver will be available");
       #else
