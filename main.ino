@@ -13,6 +13,12 @@
 #include <ArduinoJson.h>
 
 /* 
+ *  Authors:
+ *  Version:
+ *  License:
+ *  Purpose:
+ *  
+ *  Origin:
  *  Code taken from:
  *  https://github.com/cbrherms/ESP-MQTT-JSON-Multisensor/blob/8c87c4a5ac824b71de16bef0f4620344e4516924/bruh_mqtt_multisensor_github/bruh_mqtt_multisensor_github.ino
  *  and
@@ -25,20 +31,20 @@
  *  Note: I did not test this code on ESP32 yet.
  *  
  *  Adapted to run on ESP32 from original code at https://github.com/Nickduino/Somfy_Remote
-
-This program allows you to emulate a Somfy RTS or Simu HZ remote.
-If you want to learn more about the Somfy RTS protocol, check out https://pushstack.wordpress.com/somfy-rts-protocol/
-
-The rolling code will be stored in non-volatile storage (Preferences), so that you can power the Arduino off.
-
-Serial communication of the original code is replaced by MQTT over WiFi.
-
-Modifications should only be needed in config.h.
-
-For more information see https://projects.dehaan.net/
-
-All the credits go to the original authors! (see links above)
-*/
+ *
+ *  This program allows you to emulate a Somfy RTS or Simu HZ remote.
+ *  If you want to learn more about the Somfy RTS protocol, check out https://pushstack.wordpress.com/somfy-rts-protocol/
+ *
+ * The rolling code will be stored in non-volatile storage (Preferences), so that you can power the Arduino off.
+ * 
+ * Serial communication of the original code is replaced by MQTT over WiFi.
+ *
+  * Modifications should only be needed in config.h.
+  *
+  * For more information see https://projects.dehaan.net/
+  *
+  * All the credits go to the original authors! (see links above)
+  */
 
 // Configuration of the remotes that will be emulated
 struct REMOTE {
@@ -121,10 +127,6 @@ void mqttconnect();
 
 // Remote debugging setup
 #ifndef DEBUG_DISABLED
-
-  #define HOST_NAME "somfycube"
-  #define WEB_SERVER_ENABLED true
-  #define USE_MDNS true
   
   #ifdef ESP8266
     #include <ESP8266WiFi.h>
@@ -178,9 +180,10 @@ void setup() {
     // USB serial port
     Serial.begin(115200);
 
-    while (!Serial) {
-      ; // wait for Serial to become available
-    }
+    //while (!Serial) {
+    //  ; // wait for Serial to become available
+    //}
+    delay(1000); // 1 seconds
 
     Serial.print("Setting hostname if required ... ");
     //connectWiFi();
@@ -249,6 +252,7 @@ void setup() {
     #endif  // MDNS / hostname
 
     #ifdef WEB_SERVER_ENABLED
+      Serial.println("seting up handling web requests");
       HTTPServer.on("/", handleRoot);
       HTTPServer.onNotFound(handleNotFound);
       HTTPServer.begin();
@@ -535,6 +539,11 @@ void loop() {
       sendState();
     }
 
+    /// Services on WiFi
+    #ifdef WEB_SERVER_ENABLED
+      HTTPServer.handleClient();
+    #endif
+    
     #ifndef DEBUG_DISABLED
       Debug.handle(); // Remote debug over WiFi
     #endif
@@ -879,13 +888,26 @@ bool checkBoundSensor(float newValue, float prevValue, float maxDiff) {
 
 void handleRoot() {
   // Root webpage
-  String message = "Welcome to ESP";
+  String message = "";
+  message.concat("<!DOCTYPE html>");
+  message.concat("<html><head>");
+  message.concat("<title>ESP RemoteDebug</title>");
+  message.concat("</head><body><h1>");
   message.concat(HOST_NAME);
-  message.concat(" remote debugging");
-  HTTPServer.send(200, "text/plain", message);
+  message.concat("</h1>");
+  message.concat("Welcome to ESP '");
+  message.concat(HOST_NAME);
+  message.concat(" 'remote debugging.");
+  message.concat("</br>");
+  message.concat("Please see: <a href=\"https://github.com/joaoLopesF/RemoteDebugApp\">GitHub source of RemoteDebugApp</a>");
+  message.concat("</br>Which is a non-FOSS cripled solution. Please use evil telnet for now.");
+  message.concat("</body></html>");
+  //HTTPServer.send(200, "text/plain", message);
+  HTTPServer.send(200, "text/html", message);
   #ifndef DEBUG_DISABLED
   if (Debug.isActive(Debug.DEBUG)) {
-    Debug.print("Sending HTTP - 200 text/plain: ");
+    //Debug.print("Sending HTTP - 200 text/plain: ");
+    Debug.print("Sending HTTP - 200 text/html: ");
     Debug.print(message);
   }
   #endif
